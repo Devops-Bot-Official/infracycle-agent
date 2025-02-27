@@ -20,15 +20,13 @@ def load_yaml_config():
     with open(CONFIG_FILE, "r") as file:
         return yaml.safe_load(file)
 
-def execute_build_stages(jobs_or_stages,is_jobs=False):
+
+def execute_build_stages(jobs_or_stages, is_jobs=False):
     """
     Execute all stages or jobs of the build process in a single execution context.
 
     Args:
         jobs_or_stages (list): List of job or stage configurations.
-        private_ip (str): The IP address of the server.
-        task_user (str): The username for command execution.
-        identifier (str): The identifier of the server.
         is_jobs (bool): True if processing multiple jobs; False if processing stages.
 
     Returns:
@@ -39,7 +37,7 @@ def execute_build_stages(jobs_or_stages,is_jobs=False):
     # Display unified build start header
     print("=" * 43)
     print("|" + " " * 41 + "|")
-    print("|      DEVOPS-BOT BUILD STARTED       |")
+    print("|      DEVOPS-BOT INFRACYCLE BUILD STARTED       |")
     print("|" + " " * 41 + "|")
     print("=" * 43)
     print("")
@@ -80,11 +78,12 @@ def execute_build_stages(jobs_or_stages,is_jobs=False):
                             click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
                             return
                     click.echo("")
+
                 # Docker Build
-                if tasks.get("docker_build", {}).get("enabled"):
+                if tasks.get("docker_build", {}).get("enabled", False):
                     click.echo("🐳 Docker build is enabled in the configuration.")
-                    click.echo("**************************** DOCKER BUILD ENABLED *********************************")
-                
+                    click.echo("************************ DOCKER BUILD ENABLED *******************************")
+
                     result = docker_build(tasks.get("docker_build", {}), clone_dir, summary)
                     if result:
                         click.echo("✅ *********************** DOCKER BUILD COMPLETED SUCCESSFULLY **************************")
@@ -97,28 +96,30 @@ def execute_build_stages(jobs_or_stages,is_jobs=False):
                     click.echo("")
 
                 # Docker Hub Push
-                if tasks.get("docker_hub", {}).get("enabled"):
-                    click.echo("**************************** DOCKER HUB PROCESS ENABLED *********************************")
-                
+                if tasks.get("docker_hub", {}).get("enabled", False):
+                    click.echo("************************ DOCKER HUB PROCESS ENABLED *******************************")
+
                     result = push_to_docker_hub(
                         tasks.get("docker_hub", {}),
                         summary=summary
                     )
-                
+
                     if result:
-                        click.echo("✅ **************************** DOCKER HUB PROCESS COMPLETED *********************************")
+                        click.echo("✅ ************************ DOCKER HUB PROCESS COMPLETED *******************************")
                     else:
-                        click.echo(click.style("❌ **************************** DOCKER HUB PROCESS FAILED *********************************", fg="red"))
+                        click.echo(click.style("❌ ************************ DOCKER HUB PROCESS FAILED *******************************", fg="red"))
                         summary["failed"] += 1
                         if not ignore_failure:
                             click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
                             return
+                    click.echo("")
+
                 # Shell Script Execution
-                if tasks.get("sh", {}).get("enabled"):
-                    click.echo("**************************** SHELL SCRIPT EXECUTION ENABLED *********************************")
-                    
+                if tasks.get("sh", {}).get("enabled", False):
+                    click.echo("************************ SHELL SCRIPT EXECUTION ENABLED *******************************")
+
                     result = run_shell_steps(tasks.get("sh", {}), summary)
-                    
+
                     if result:
                         click.echo("✅ *********************** SHELL SCRIPTS COMPLETED SUCCESSFULLY **************************")
                     else:
@@ -127,28 +128,45 @@ def execute_build_stages(jobs_or_stages,is_jobs=False):
                         if not ignore_failure:
                             click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
                             return
-                    click.echo("")    
+                    click.echo("")
+
                 # Bash Script Execution
-                if tasks.get("bash", {}).get("enabled"):
-                    click.echo("")
-                    click.echo("**************************** BASH STEPS ENABLED *********************************")
-                    click.echo("")
-                    
+                if tasks.get("bash", {}).get("enabled", False):
+                    click.echo("************************ BASH SCRIPT EXECUTION ENABLED *******************************")
+
                     result = run_bash_steps(tasks.get("bash", {}), summary)
-                    
+
                     if result:
-                        click.echo(click.style("✅ **************************** BASH STEPS COMPLETED *********************************", fg="green"))
+                        click.echo("✅ *********************** BASH STEPS COMPLETED SUCCESSFULLY **************************")
                     else:
-                        click.echo(click.style("❌ **************************** BASH STEPS FAILED *********************************", fg="red"))
+                        click.echo(click.style("❌ *********************** BASH STEPS FAILED **************************", fg="red"))
                         summary["failed"] += 1
                         if not ignore_failure:
                             click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
-                            return     
+                            return
+                    click.echo("")
+
+                # Maven Build
+                if tasks.get("maven", {}).get("enabled", False):
+                    click.echo("📢 Maven build is enabled in the configuration.")
+                    click.echo("************************ MAVEN BUILD ENABLED *******************************")
+
+                    result = run_maven_build(tasks.get("maven", {}), clone_dir, summary)
+
+                    if result:
+                        click.echo("✅ *********************** MAVEN BUILD COMPLETED SUCCESSFULLY **************************")
+                    else:
+                        click.echo(click.style("❌ *********************** MAVEN BUILD FAILED **************************", fg="red"))
+                        summary["failed"] += 1
+                        if not ignore_failure:
+                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
+                            return
+                    click.echo("")
 
                 # Send Email Notification
-                if tasks.get("send_notification", {}).get("enabled"):
-                    click.echo("**************************** EMAIL NOTIFICATION ENABLED *********************************")
-                
+                if tasks.get("send_notification", {}).get("enabled", False):
+                    click.echo("************************ EMAIL NOTIFICATION ENABLED *******************************")
+
                     try:
                         result = notify_on_task_completion(
                             tasks.get("send_notification", {}).get("task_name", stage_name),
@@ -156,44 +174,147 @@ def execute_build_stages(jobs_or_stages,is_jobs=False):
                             tasks.get("send_notification", {}).get("recipients", []),
                             tasks.get("send_notification", {}).get("email_config", {})
                         )
-                
+
                         if result:
-                            click.echo("**************************** EMAIL NOTIFICATION SENT *********************************")
+                            click.echo("✅ ************************ EMAIL NOTIFICATION SENT *******************************")
                             summary["completed"] += 1  # Increment completed for successful notification
                         else:
-                            click.echo(click.style("**************************** EMAIL NOTIFICATION FAILED *********************************", fg="red"))
+                            click.echo(click.style("❌ ************************ EMAIL NOTIFICATION FAILED *******************************", fg="red"))
                             summary["failed"] += 1
                             if not ignore_failure:
                                 click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
                                 return
-                
                     except Exception as e:
                         click.echo(click.style(f"❌ Error during notification: {str(e)}", fg="red"))
                         summary["failed"] += 1
                         if not ignore_failure:
                             return
+
+                # Gradle Build
+                if tasks.get("gradle", {}).get("enabled", False):
+                    click.echo("📢 Gradle build is enabled in the configuration.")
+                    click.echo("************************ GRADLE BUILD ENABLED *******************************")
+
+                    result = run_gradle_build(tasks.get("gradle", {}), clone_dir, summary)
+
+                    if result:
+                        click.echo("✅ *********************** GRADLE BUILD COMPLETED SUCCESSFULLY **************************")
+                    else:
+                        click.echo(click.style("❌ *********************** GRADLE BUILD FAILED **************************", fg="red"))
+                        summary["failed"] += 1
+                        if not ignore_failure:
+                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
+                            return
+                    click.echo("")
+
+                # Trivy Scanning
+                if tasks.get("trivy", {}).get("enabled", False):
+                    click.echo("📢 Trivy scanning is enabled in the configuration.")
+                    click.echo("************************ TRIVY SCANNING ENABLED *******************************")
+
+                    result = run_trivy_scan(tasks.get("trivy", {}), summary)
+
+                    if result:
+                        click.echo("✅ *********************** TRIVY SCANNING COMPLETED SUCCESSFULLY **************************")
+                    else:
+                        click.echo(click.style("❌ *********************** TRIVY SCANNING FAILED **************************", fg="red"))
+                        summary["failed"] += 1
+                        if not ignore_failure:
+                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
+                            return
+                    click.echo("")
+
+                # Yarn Build
+                if tasks.get("yarn", {}).get("enabled", False):
+                    click.echo("📢 Yarn build is enabled in the configuration.")
+                    click.echo("************************ YARN BUILD ENABLED *******************************")
+
+                    result = run_yarn_build(tasks.get("yarn", {}), clone_dir, summary)
+
+                    if result:
+                        click.echo("✅ *********************** YARN BUILD COMPLETED SUCCESSFULLY **************************")
+                    else:
+                        click.echo(click.style("❌ *********************** YARN BUILD FAILED **************************", fg="red"))
+                        summary["failed"] += 1
+                        if not ignore_failure:
+                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
+                            return
+                    click.echo("")
+
+                # Go Build
+                if tasks.get("go_build", {}).get("enabled", False):
+                    click.echo("📢 Go Modules build is enabled in the configuration.")
+                    click.echo("************************ GO BUILD ENABLED *******************************")
+
+                    result = run_go_build(tasks.get("go_build", {}), clone_dir, summary)
+
+                    if result:
+                        click.echo("✅ *********************** GO BUILD COMPLETED SUCCESSFULLY **************************")
+                    else:
+                        click.echo(click.style("❌ *********************** GO BUILD FAILED **************************", fg="red"))
+                        summary["failed"] += 1
+                        if not ignore_failure:
+                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
+                            return
+                    click.echo("")
+
+                # NPM Build
+                if tasks.get("npm", {}).get("enabled", False):
+                    click.echo("📢 NPM build is enabled in the configuration.")
+                    click.echo("************************ NPM BUILD ENABLED *******************************")
+
+                    result = run_npm_build(tasks.get("npm", {}), clone_dir, summary)
+
+                    if result:
+                        click.echo("✅ *********************** NPM BUILD COMPLETED SUCCESSFULLY **************************")
+                    else:
+                        click.echo(click.style("❌ *********************** NPM BUILD FAILED **************************", fg="red"))
+                        summary["failed"] += 1
+                        if not ignore_failure:
+                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
+                            return
+                    click.echo("")
+
+                # SonarQube Analysis
+                if tasks.get("sonarqube_analysis", {}).get("enabled", False):
+                    click.echo("📢 SonarQube analysis is enabled in the configuration.")
+                    click.echo("************************ SONARQUBE ANALYSIS ENABLED *******************************")
+
+                    result = run_sonar_analysis(tasks.get("sonarqube_analysis", {}), clone_dir, summary)
+
+                    if result:
+                        click.echo("✅ *********************** SONARQUBE ANALYSIS COMPLETED SUCCESSFULLY **************************")
+                    else:
+                        click.echo(click.style("❌ *********************** SONARQUBE ANALYSIS FAILED **************************", fg="red"))
+                        summary["failed"] += 1
+                        if not ignore_failure:
+                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
+                            return
+                    click.echo("")
+
                 # Request Approval
-                if tasks.get("request_approval", {}).get("enabled"):
-                    click.echo("**************************** APPROVAL REQUEST ENABLED *********************************")
+                if tasks.get("request_approval", {}).get("enabled", False):
+                    click.echo("************************ APPROVAL REQUEST ENABLED *******************************")
+
                     try:
                         approved = request_approval(tasks.get("request_approval", {}).get("task_name", stage_name))
                         if approved:
-                            click.echo("**************************** APPROVAL GRANTED *********************************")
+                            click.echo("✅ ************************ APPROVAL GRANTED *******************************")
                             summary["completed"] += 1
                         else:
-                            click.echo(click.style("**************************** APPROVAL DENIED *********************************", fg="red"))
+                            click.echo(click.style("❌ ************************ APPROVAL DENIED *******************************", fg="red"))
                             summary["failed"] += 1
                             if not ignore_failure:
                                 click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to denied approval.", fg="red"))
                                 return
                     except Exception as e:
-                        click.echo(click.style(f"Error during approval request: {str(e)}", fg="red"))
+                        click.echo(click.style(f"❌ Error during approval request: {str(e)}", fg="red"))
                         summary["failed"] += 1
                         if not ignore_failure:
-                            click.echo(click.style(f"Stopping execution of stage '{stage_name}' due to failure.", fg="red"))
-                            return 
+                            return
+
             except Exception as e:
-                click.echo(click.style(f"Error during stage '{stage_name}': {str(e)}", fg="red"))
+                click.echo(click.style(f"❌ Error during stage '{stage_name}': {str(e)}", fg="red"))
                 summary["failed"] += 1
 
             click.echo(f"[INFO] ***************** Completed stage: {stage_name} *********************\n")
@@ -208,14 +329,405 @@ def execute_build_stages(jobs_or_stages,is_jobs=False):
         click.echo(f"Executing {len(jobs_or_stages)} stages sequentially...\n")
         for stage in jobs_or_stages:
             process_single_item(stage)
+
     simulation_thread.join()
 
     click.echo(f"Build process completed. Summary: {summary}")
     print("=" * 43)
-    print("|      DEVOPS-BOT BUILD COMPLETED       |")
+    print("|      DEVOPS-BOT INFRACYCLE BUILD COMPLETED        |")
     print("=" * 43)
 
 ###################################
+def run_yarn_build(yarn_config, clone_dir, summary):
+    """
+    Run Yarn build.
+
+    Args:
+        yarn_config (dict): Configuration dictionary for Yarn.
+        clone_dir (str): The directory containing the source code.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the Yarn build was successful, False otherwise.
+    """
+    if not yarn_config.get("enabled", True):
+        click.echo(click.style("⚠️ Yarn build is not enabled; skipping this step.", fg="yellow"))
+        return False
+
+    click.echo("🚀 Starting Yarn build...")
+
+    # Install dependencies
+    yarn_install_command = f"cd {clone_dir} && yarn install"
+    process = subprocess.Popen(yarn_install_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Failed to install Yarn dependencies.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    # Execute Yarn build
+    yarn_build_command = f"cd {clone_dir} && yarn build"
+    process = subprocess.Popen(yarn_build_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Yarn build failed.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    click.echo(click.style("✅ Yarn build completed successfully.", fg="green"))
+    summary["completed"] += 1
+    return True
+def run_sonar_analysis(sonar_config, clone_dir, summary):
+    """
+    Run SonarQube analysis.
+
+    Args:
+        sonar_config (dict): Configuration dictionary for SonarQube.
+        clone_dir (str): The directory containing the source code.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the SonarQube analysis was successful, False otherwise.
+    """
+    if not sonar_config.get("enabled", True):
+        click.echo(click.style("⚠️ SonarQube analysis is not enabled; skipping this step.", fg="yellow"))
+        return False
+
+    click.echo("🚀 Starting SonarQube analysis...")
+
+    sonar_url = sonar_config.get("server_url")
+    project_key = sonar_config.get("project_key")
+    sonar_token = sonar_config.get("token")
+    source_dir = sonar_config.get("source_dir", clone_dir)
+
+    if not all([sonar_url, project_key, sonar_token]):
+        click.echo(click.style("❌ SonarQube configuration is incomplete. Skipping analysis.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    # Construct SonarQube command
+    sonar_command = (
+        f"sonar-scanner -Dsonar.projectKey={project_key} "
+        f"-Dsonar.sources={source_dir} "
+        f"-Dsonar.projectBaseDir={source_dir} "
+        f"-Dsonar.host.url={sonar_url} "
+        f"-Dsonar.login={sonar_token}"
+    )
+
+    # Execute SonarQube scan
+    process = subprocess.Popen(sonar_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ SonarQube analysis failed.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    click.echo(click.style("✅ SonarQube analysis completed successfully.", fg="green"))
+    summary["completed"] += 1
+    return True
+def run_npm_build(npm_config, clone_dir, summary):
+    """
+    Run npm build.
+
+    Args:
+        npm_config (dict): Configuration dictionary for npm.
+        clone_dir (str): The directory containing the source code.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the NPM build was successful, False otherwise.
+    """
+    if not npm_config.get("enabled", True):
+        click.echo(click.style("⚠️ NPM build is not enabled; skipping this step.", fg="yellow"))
+        return False
+
+    click.echo("🚀 Starting NPM build...")
+
+    # Install dependencies
+    npm_install_command = f"cd {clone_dir} && npm install"
+    process = subprocess.Popen(npm_install_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Failed to install npm dependencies.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    # Execute npm build
+    npm_build_command = f"cd {clone_dir} && npm run build"
+    process = subprocess.Popen(npm_build_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ NPM build failed.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    click.echo(click.style("✅ NPM build completed successfully.", fg="green"))
+    summary["completed"] += 1
+    return True
+def run_go_build(go_config, clone_dir, summary):
+    """
+    Run Go build process.
+
+    Args:
+        go_config (dict): Configuration dictionary for Go build.
+        clone_dir (str): The directory containing the source code.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the Go build was successful, False otherwise.
+    """
+    if not go_config.get("enabled", True):
+        click.echo(click.style("⚠️ Go build is not enabled; skipping this step.", fg="yellow"))
+        return False
+
+    click.echo("🚀 Starting Go build...")
+
+    # Initialize Go modules
+    go_mod_init = f"cd {clone_dir} && go mod init"
+    subprocess.run(go_mod_init, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # Install dependencies
+    go_get_command = f"cd {clone_dir} && go get ./..."
+    subprocess.run(go_get_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # Execute Go build
+    go_build_command = f"cd {clone_dir} && go build -v"
+    process = subprocess.Popen(go_build_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Go build failed.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    click.echo(click.style("✅ Go build completed successfully.", fg="green"))
+    summary["completed"] += 1
+    return True
+
+def run_trivy_scan(trivy_config, summary):
+    """
+    Run a Trivy scan.
+
+    Args:
+        trivy_config (dict): Configuration dictionary for Trivy.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the scan was successful, False otherwise.
+    """
+    target_type = trivy_config.get("target_type", "image")  # "image" or "filesystem"
+    target = trivy_config.get("target", "dob-trial-build:v6")
+    output_format = trivy_config.get("format", "json")
+    severity = trivy_config.get("severity", "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL")
+
+    # Construct Trivy scan command
+    trivy_scan_command = f"trivy {target_type} {target} --format {output_format} --severity {severity}"
+
+    click.echo(f"🔍 Running Trivy scan on {target}...")
+
+    process = subprocess.Popen(
+        trivy_scan_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Trivy scan failed.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    click.echo(click.style("✅ Trivy scan completed successfully.", fg="green"))
+    summary["completed"] += 1
+    return True
+def run_gradle_build(gradle_config, clone_dir, summary):
+    """
+    Run Gradle build.
+
+    Args:
+        gradle_config (dict): Configuration dictionary for Gradle.
+        clone_dir (str): The directory containing the source code.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the Gradle build was successful, False otherwise.
+    """
+    if not gradle_config.get("enabled", True):
+        click.echo(click.style("⚠️ Gradle build is not enabled; skipping.", fg="yellow"))
+        return False
+
+    click.echo("🚀 Starting Gradle build...")
+
+    gradle_tasks = gradle_config.get("target", "build")
+
+    # Check if Gradle Wrapper exists
+    check_gradlew_command = f"cd {clone_dir} && [ -f ./gradlew ] && echo 'found' || echo 'missing'"
+    process = subprocess.run(check_gradlew_command, shell=True, capture_output=True, text=True)
+
+    if "missing" in process.stdout:
+        click.echo(click.style("⚠️ Gradle Wrapper (gradlew) not found. Using system Gradle.", fg="yellow"))
+        gradle_command = f"cd {clone_dir} && gradle {gradle_tasks} --no-daemon"
+    else:
+        click.echo(click.style("✅ Using Gradle Wrapper (gradlew) for the build.", fg="green"))
+        gradle_command = f"cd {clone_dir} && ./gradlew {gradle_tasks} --no-daemon"
+
+    # Execute Gradle build
+    process = subprocess.Popen(gradle_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Gradle build failed.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    click.echo(click.style("✅ Gradle build completed successfully.", fg="green"))
+    summary["completed"] += 1
+    return True
+def run_ant_build(ant_config, clone_dir, summary):
+    """
+    Run Ant build.
+
+    Args:
+        ant_config (dict): Configuration dictionary for Ant build.
+        clone_dir (str): The directory containing the source code.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the Ant build was successful, False otherwise.
+    """
+    if not ant_config.get("enabled", True):
+        click.echo(click.style("⚠️ Ant build is not enabled; skipping.", fg="yellow"))
+        return False
+
+    click.echo("🚀 Starting Ant build...")
+
+    # Ant-specific values
+    build_file = ant_config.get("build_file", "build.xml")
+    target = ant_config.get("target", "build")
+
+    # Construct Ant build command
+    ant_command = f"cd {clone_dir} && ant -f {build_file} {target}"
+
+    click.echo(f"🔧 Executing Ant build command: {ant_command}")
+    
+    # Execute the Ant build
+    process = subprocess.Popen(ant_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Ant build failed.", fg="red"))
+        summary["failed"] += 1
+        return False
+
+    click.echo(click.style(f"✅ Ant build completed successfully.", fg="green"))
+    summary["completed"] += 1
+    return True
+
+def run_maven_build(maven_config, clone_dir, summary):
+    """
+    Run Maven build inside the Build Agent container.
+
+    Args:
+        maven_config (dict): Configuration dictionary for Maven build.
+        clone_dir (str): The directory containing the source code.
+        summary (dict): A dictionary to track the task results.
+
+    Returns:
+        bool: True if the Maven build was successful, False otherwise.
+    """
+    if not maven_config.get("enabled"):
+        click.echo(click.style("⚠️ Maven build is not enabled; skipping this step.", fg="yellow"))
+        return False
+
+    click.echo("🚀 Starting Maven build...")
+
+    # Maven-specific configuration values
+    project_pom = maven_config.get("project_pom", "pom.xml")
+    maven_goals = maven_config.get("goals", "clean install")
+    profiles = maven_config.get("profiles", "")
+    profile_option = f"-P{profiles}" if profiles else ""
+    output_dir = maven_config.get("output_dir", "/tmp/maven_artifacts")
+
+    # Ensure the artifact directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Construct Maven build command
+    maven_build_command = f"cd {clone_dir} && mvn -f {project_pom} {maven_goals} {profile_option} --batch-mode"
+
+    # Execute Maven build command with real-time output
+    click.echo(f"🔧 Executing: `{maven_build_command}`")
+    process = subprocess.Popen(
+        maven_build_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+
+    for line in iter(process.stdout.readline, ''):
+        click.echo(line, nl=False)  # Stream Maven output live
+
+    process.stdout.close()
+    process.wait()
+
+    if process.returncode != 0:
+        click.echo(click.style("❌ Maven build failed.", fg="red"))
+        summary['failed'] += 1
+        return False
+
+    click.echo(click.style("✅ Maven build completed successfully.", fg="green"))
+
+    # Move artifacts to the specified output directory
+    move_artifacts_command = f"find {clone_dir}/target -type f -name '*.jar' -o -name '*.war' -exec mv {{}} {output_dir} \\;"
+    subprocess.run(move_artifacts_command, shell=True, check=True)
+
+    click.echo(click.style(f"📦 Artifacts moved to {output_dir}.", fg="green"))
+    summary['completed'] += 1
+    return True
 def request_approval(task_name):
     # Prompt user for approval
     approval = click.prompt(f"Approval required for task '{task_name}'. Do you want to proceed? [y/N]", default='n')
@@ -609,4 +1121,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
